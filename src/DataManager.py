@@ -1,0 +1,122 @@
+# -*- coding: utf-8 -*-
+"""
+Namespace for DataManagement functions.
+
+Stores and Loads articles from the Database.
+"""
+
+
+import json
+from os import makedirs as os_makedirs
+from os.path import isfile as os_path_isfile, exists as os_path_exists, join as os_path_join
+from re import sub as re_sub
+from utils import DBUtils as DB
+
+#base path where the articles are stored
+try:
+    with open('config/config', 'r') as config:
+        configDict = json.load(config)
+    BASE_PATH = configDict['basepath']
+except:
+    print 'config not found'
+    BASE_PATH = ''
+
+def artExists(link):
+    if DB.execSelectQuery('select * from articles\
+    where link=\'{}\''.format(link)) == []:
+        return False
+    return True
+
+def storeArticle(article={}, articles=[]):
+    """
+    saveArticle(Dict,[Dict])
+
+    Saves the article as a Json into the Article Database.
+    
+    param article:Dict - the content and data from the article.
+    param articles:[Dict] - the content and data of more than one article.
+    (One parameter has to be set)
+    """
+    #check if article isn't empty
+    if article != {}:
+        _storeArticleToDB(article):
+            
+    #check if articles isn't empty
+    elif articles != []:
+        for arg in articles:
+            _storeArticleToDB(arg)
+    #raise Exception if bot arguments were empty
+    else:
+        raise AttributeError('No given arguments!')
+
+def loadArticles(categories=[]):
+    """
+    loadArticles([String]=[]) -> [Dict]
+    
+    Loads all Articles from the Database.
+
+    param categories:[String] - the categories for the articles.
+    """
+    articles = []
+    articlePaths = []
+    with open(os_path_join(BASE_PATH, 'article_log'), 'r') as log:
+        for line in log:
+            articlePath = re_sub('http://www.spiegel.de/','',line.strip())
+            for category in categories:
+                if category in articlePath.split('/'):
+                    articlePaths.append(articlePath)
+                    break
+    for articlePath in articlePaths:
+        articles.append(loadArticle(articlePath))
+    return articles
+
+def loadArticle(path):
+    """
+    loadArticle(String) -> Dict
+    
+    Loads one article.
+
+    param path:String - the article path.
+    """
+    with open(os_path_join(path)) as art: 
+        article = json.load(art)
+    return article
+
+def _storeArticle(article):
+    """
+    _safeArticle(Dict) -> Bool
+
+    private help method to safe an aticle
+
+    param article:Dict -
+    """
+    #    try:
+    #make a path according to the article's topics
+    path = re_sub('http://www.spiegel.de/','', article['link']).split('/')
+    filename = path.pop(-1)
+    storePath = os_path_join(BASE_PATH,os_path_join(*path))
+    #create directories
+    if not os_path_exists(storePath):
+        os_makedirs(storePath)
+    #write article as json to the file
+    with open(os_path_join(storePath, filename),'w') as o:
+        json.dump(article, o)
+    #write the article name to the log
+    if os_path_isfile(BASE_PATH + 'article_log'):
+        log = open(BASE_PATH + 'article_log','a')
+    else:
+        log = open(BASE_PATH + 'article_log','w')
+    log.write(article['link'] + '\n')
+    log.close()
+    return True
+
+
+def _storeArticleToDB(article):
+    """
+    _storeArticleToDB(Dict)
+
+    Stores the article to the SQL database
+
+    param article:Dict
+    """
+    DB.storeToDB(article)

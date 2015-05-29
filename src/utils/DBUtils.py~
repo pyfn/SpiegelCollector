@@ -1,0 +1,94 @@
+# -*- coding: utf-8 -*-
+
+"""
+Namespace for Database Utilitiy funciotns and Classes
+
+"""
+
+from os import remove as os_remove
+from os.path import isfile as os_path_isfile, join as os_join
+from time import sleep as time_sleep
+import sqlite3
+
+#base path where the articles are stored
+try:
+    with open('config/config', 'r') as config:
+        configDict = json.load(config)
+    BASE_PATH = configDict['basepath']
+except:
+    print 'config not found'
+    BASE_PATH = ''
+
+DBPATH = os_join(BASE_PATH,'article.db')
+
+ARTICLE_QUERY = {
+    'articles':'\'{articleid}\',\'{link}\',\'{content}\',\'{site}\'\
+    ,\'{author}\',{timestamp},\'{comment}\'',
+    'articletags':'{tagid},{articleid}',
+    'tags':'{tagid},{tagname}'
+}
+
+CREATE = 'create table {}({})'
+
+TABLE_QUERY = {
+    'articles':'articleid integer primary key, link text, \
+    content text, site text, author text, timestamp integer, \
+    comment text',
+    'articletags':'tagid integer,articleid integer',
+    'tags':'tagid integer primary key, tagname text unique'
+}
+
+if not os_path_isfile(DBPATH):
+    db = sqlite3.connect(DBPATH)
+    c = db.cursor()
+    for table, query in TABLE_QUERY.iteritems():
+        c.execute(CREATE.format(table,query))
+    db.commit()
+    db.close()
+
+
+def storeToDB(article):
+    for a,b in article.iteritems():
+        print a,' : ', b
+        
+    try:
+        db = sqlite3.connect(DBPATH)
+        c = db.cursor()
+        c.execute('insert into articles values({})'.format(
+            ARTICLE_QUERY['articles'].format(**article)))
+        db.commit()
+        articleid = c.execute('select articleid where \
+        link=\'{}\''.format(article['link']))
+        print articleid
+        for tag in article['tags']:
+            tagid = c.execute(
+                'select tagid where tagname=\'{}\''.format(
+                tag)).fetchone()
+            print tag
+            if tagid == None:
+                c.execute('insert into tags values(NULL,{})'.format(
+                    tag))
+                db.commit()
+                tagid = c.execute(
+                    'select tagid where tagname=\'{}\''.format(
+                    tag)).fetchone()
+            print tagid
+            c.execute('insert into articletags values({},{})'.format(
+                tagid,articleid))
+        db.commit()
+    except sqlite3.DatabaseError as e:
+        print str(e)
+    finally:
+        db.close()
+
+def execQuery(query):
+    try:
+        db = sqlite3.connect(DBPATH)
+        c = db.cursor()
+        c.execute(query)
+        db.commit()
+    except sqlite3.DatabaseError as e:
+        print 'Something wrong with the Query or the Database!'
+        print str(e)
+    finally:
+        db.close()
